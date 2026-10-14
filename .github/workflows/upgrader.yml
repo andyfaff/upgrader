@@ -62,6 +62,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: scipy/scipy-release
+          token: ${{ secrets.CROSS_REPO_PAT }}
           persist-credentials: false
 
       # the version of python we'll run cibuildwheel with
@@ -75,9 +76,24 @@ jobs:
           gha-tools autoupdate .github/workflows/ --diff -s specific --pin all --write
           git diff --exit-code
 
-      - name: Out of date --> update
+      - name: Create Pull Request
         if: failure()
-        run: |
-          export SCIPY_SRC=$(PWD)/scipy-src
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # Pass the PAT so the action can authenticate with GitHub
+          token: ${{ secrets.CROSS_REPO_PAT }}
 
-      # TODO MAKE A PR
+          # CRUCIAL: Define your fork here.
+          # Your PAT must have Write access to this specific repository.
+          push-to-fork: 'andyfaff/scipy-release'
+
+          # Turn this off because your token won't have permission
+          # to allow upstream maintainers to modify your fork's branch.
+          maintainer-can-modify: false
+
+          # PR Configuration
+          branch: 'automated-sync-patch'
+          base: 'main' # The branch on the upstream repo you want to merge into
+          commit-message: 'chore: automated data sync'
+          title: 'Automated contribution from external runner'
+          body: 'This PR was pushed to a fork and submitted automatically.'
