@@ -1,0 +1,57 @@
+name: upgrader.yml
+on:
+  schedule:
+    #        ┌───────────── minute (0 - 59)
+    #        │  ┌───────────── hour (0 - 23)
+    #        │  │ ┌───────────── day of the month (1 - 31)
+    #        │  │ │ ┌───────────── month (1 - 12 or JAN-DEC)
+    #        │  │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
+    #        │  │ │ │ │
+    - cron: "42 2 * * SUN,WED"
+  pull_request:
+    branches:
+      - main
+      - maintenance/**
+  push:
+    branches:
+      - main  # FOR TESTING ONLY
+  workflow_dispatch:
+
+jobs:
+  check_scipy_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scipy-release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: scipy/scipy
+          persist-credentials: false
+          repository: scipy/scipy-release
+
+      - name: Checkout scipy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: scipy/scipy
+          path: scipy-src
+          submodules: true
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # can't use checksum here, because there are different packages
+          # for different OS
+          enable-cache: false
+
+      - name: Check lock file
+        run: |
+          python3 tools/sync_dependency_groups.py scipy-src | diff -u pyproject.toml -
+          uv lock --check --exclude-newer "7 days"
+
+      - name: Out of data --> update
+        if: failure()
+        run: |
+          export SCIPY_SRC=$(PWD)/scipy-src
+          bash tools/update_lock.sh --upgrade
+
+      # TODO MAKE A PR
